@@ -1,0 +1,47 @@
+name: Daily Extras (DM Drafts, X Draft, Report)
+
+on:
+  schedule:
+    - cron: "0 10 * * *"  # 10 AM UTC daily
+  workflow_dispatch: {}
+
+jobs:
+  daily-extras:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+
+      - name: Draft X post
+        run: python scripts/generate_x_post.py
+        env:
+          POLLINATIONS_KEY: ${{ secrets.POLLINATIONS_KEY }}
+        continue-on-error: true
+
+      - name: Fetch marketplace metrics + build daily report
+        run: |
+          python scripts/fetch_marketplace_metrics.py
+          python scripts/daily_report.py
+        env:
+          BIZLANCE_METRICS_API_URL: ${{ secrets.BIZLANCE_METRICS_API_URL }}
+          BIZLANCE_METRICS_API_KEY: ${{ secrets.BIZLANCE_METRICS_API_KEY }}
+        continue-on-error: true
+
+      - name: Draft DM replies for human review
+        run: python scripts/dm_draft_replies.py
+        env:
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          META_IG_BUSINESS_ID: ${{ secrets.META_IG_BUSINESS_ID }}
+          POLLINATIONS_KEY: ${{ secrets.POLLINATIONS_KEY }}
+        continue-on-error: true
+
+      - name: Commit new drafts + report back to the repo
+        run: |
+          git config user.name "bizlance-bot"
+          git config user.email "bot@bizlance.online"
+          git add dm_drafts.jsonl x_post_drafts.jsonl reports/ marketplace_metrics.json || true
+          git diff --cached --quiet || git commit -m "Add daily drafts + report [skip ci]"
+          git push || true

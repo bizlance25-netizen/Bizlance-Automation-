@@ -1,0 +1,23 @@
+name: Daily Blog Post
+
+on:
+  schedule:
+    - cron: "0 9 * * *"   # 9 AM UTC daily — adjust to your timezone
+  workflow_dispatch: {}   # lets you also trigger it manually from the Actions tab
+
+jobs:
+  post-blog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python scripts/post_blog.py
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          POLLINATIONS_KEY: ${{ secrets.POLLINATIONS_KEY }}

@@ -1,0 +1,60 @@
+name: Daily Social Posting (Buyer AM / Provider PM)
+
+# Two separate time slots so both marketplace sides (buyers + providers) get
+# covered daily, timed around generic "peak engagement" windows (late morning
+# and early evening). These are NOT derived from your actual audience's real
+# active hours yet — see the note at the top of scripts/post_social.py for how
+# to swap in real Instagram Insights data once your account has follower history.
+# Adjust these UTC times to match your audience's actual timezone.
+
+on:
+  schedule:
+    - cron: "30 11 * * *"  # ~11:30 UTC — generic "late morning" window; BUYER post+story
+    - cron: "0 18 * * *"   # ~18:00 UTC — generic "early evening" window; PROVIDER post+story
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "morning or evening"
+        required: true
+        default: "morning"
+
+jobs:
+  post-social:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+
+      - name: Determine slot from trigger time
+        id: slot
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.slot }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "30 11 * * *" ]; then
+            echo "value=morning" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=evening" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post to Instagram + Facebook (post + story)
+        run: python scripts/post_social.py
+        env:
+          SLOT: ${{ steps.slot.outputs.value }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          META_IG_BUSINESS_ID: ${{ secrets.META_IG_BUSINESS_ID }}
+          META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+        continue-on-error: true  # expected to fail until Meta App Review is approved
+
+      - name: Post to Threads (once/day, morning slot only)
+        if: steps.slot.outputs.value == 'morning'
+        run: python scripts/post_threads.py
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          POLLINATIONS_KEY: ${{ secrets.POLLINATIONS_KEY }}
+        continue-on-error: true  # expected to fail until Threads App Review is approved

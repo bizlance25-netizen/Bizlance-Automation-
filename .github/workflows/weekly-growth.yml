@@ -1,0 +1,46 @@
+name: Weekly Growth Extras
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Monday 9 AM UTC
+  workflow_dispatch: {}
+
+jobs:
+  weekly-extras:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+
+      - name: Generate newsletter draft
+        run: python scripts/generate_newsletter.py
+        env:
+          POLLINATIONS_KEY: ${{ secrets.POLLINATIONS_KEY }}
+        continue-on-error: true
+
+      - name: Generate carousel
+        run: python scripts/generate_carousel.py
+        env:
+          POLLINATIONS_KEY: ${{ secrets.POLLINATIONS_KEY }}
+        continue-on-error: true
+
+      - name: Send partnership outreach
+        run: python scripts/partnership_outreach.py
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          PARTNERSHIPS_SHEET_ID: ${{ secrets.PARTNERSHIPS_SHEET_ID }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          POLLINATIONS_KEY: ${{ secrets.POLLINATIONS_KEY }}
+        continue-on-error: true
+
+      - name: Commit new drafts back to the repo
+        run: |
+          git config user.name "bizlance-bot"
+          git config user.email "bot@bizlance.online"
+          git add newsletter_drafts/ carousel_drafts/ || true
+          git diff --cached --quiet || git commit -m "Add weekly content drafts [skip ci]"
+          git push || true
